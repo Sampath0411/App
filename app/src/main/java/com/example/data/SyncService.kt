@@ -11,8 +11,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
- * SyncService coordinates the offline cache (StorageService) with the cloud backend (Firestore).
- * As per Phase 2 requirements, it provides read/write methods syncing to Firestore,
+ * SyncService coordinates the offline cache (StorageService) with the cloud backend (Supabase).
+ * As per Phase 2 requirements, it provides read/write methods syncing to Supabase,
  * real-time listeners for updates across devices, and a startup migration rule.
  */
 class SyncService(
@@ -22,8 +22,8 @@ class SyncService(
     private val tag = "SyncService"
     private val scope = CoroutineScope(Dispatchers.IO)
 
-    // Companion object simulates the Firestore cloud database in the preview run.
-    // In production, these collections are mapped directly to Google Firestore listeners.
+    // Companion object simulates the Supabase cloud database in the preview run.
+    // In production, these collections are mapped directly to Google Supabase listeners.
     companion object {
         private val _cloudStudents = MutableStateFlow<List<Student>>(emptyList())
         val cloudStudents: StateFlow<List<Student>> = _cloudStudents.asStateFlow()
@@ -39,38 +39,40 @@ class SyncService(
 
         private var isPrepopulated = false
 
-        fun updateFirestoreStudents(list: List<Student>) {
+        fun updateSupabaseStudents(list: List<Student>) {
             _cloudStudents.value = list
         }
 
-        fun updateFirestoreAttendance(list: List<AttendanceRecord>) {
+        fun updateSupabaseAttendance(list: List<AttendanceRecord>) {
             _cloudAttendance.value = list
         }
 
-        fun updateFirestoreTimetable(list: List<TimetableEntry>) {
+        fun updateSupabaseTimetable(list: List<TimetableEntry>) {
             _cloudTimetable.value = list
         }
 
-        fun updateFirestoreNotifications(list: List<NotificationItem>) {
+        fun updateSupabaseNotifications(list: List<NotificationItem>) {
             _cloudNotifications.value = list
         }
     }
 
     init {
-        // Pull latest state from Supabase Realtime Database
-        SupabaseService.pullLatestData(storageService) {
-            // Run standard local database migration check
-            performStartupMigration()
+        scope.launch {
+            // 1. Pull latest state from Supabase first
+            SupabaseService.pullLatestData(storageService) {
+                // 2. Once data is pulled, run migration check
+                performStartupMigration()
+            }
+
+            // 3. Then start "observing" (simulated real-time)
+            observeRealtimeSupabaseUpdates()
         }
-        
-        // Start listening to Firestore real-time streams to update local cache offline copy
-        observeRealtimeFirestoreUpdates()
     }
 
     /**
      * Migration rule: On app start, if AsyncStorage (SharedPreferences local) has data
-     * and Firestore is empty, push AsyncStorage data to Firestore.
-     * After migration (or regularly), read/write goes to Firestore, with storageService as offline cache.
+     * and Supabase is empty, push AsyncStorage data to Supabase.
+     * After migration (or regularly), read/write goes to Supabase, with storageService as offline cache.
      */
     private fun performStartupMigration() {
         val localStudents = storageService.getStudents()
@@ -80,21 +82,21 @@ class SyncService(
         Log.d(tag, "Startup Sync Check. Local records count - Students: ${localStudents.size}, Attendance: ${localAttendance.size}, Timetable: ${localTimetable.size}")
 
         if (_cloudStudents.value.isEmpty() && localStudents.isNotEmpty()) {
-            Log.d(tag, "Migrating local students cache to Cloud Firestore...")
+            Log.d(tag, "Migrating local students cache to Cloud Supabase...")
             _cloudStudents.value = localStudents
         }
         if (_cloudAttendance.value.isEmpty() && localAttendance.isNotEmpty()) {
-            Log.d(tag, "Migrating local attendance cache to Cloud Firestore...")
+            Log.d(tag, "Migrating local attendance cache to Cloud Supabase...")
             _cloudAttendance.value = localAttendance
         }
         val localNotifications = storageService.getNotifications()
 
         if (_cloudTimetable.value.isEmpty() && localTimetable.isNotEmpty()) {
-            Log.d(tag, "Migrating local timetable cache to Cloud Firestore...")
+            Log.d(tag, "Migrating local timetable cache to Cloud Supabase...")
             _cloudTimetable.value = localTimetable
         }
         if (_cloudNotifications.value.isEmpty() && localNotifications.isNotEmpty()) {
-            Log.d(tag, "Migrating local notifications cache to Cloud Firestore...")
+            Log.d(tag, "Migrating local notifications cache to Cloud Supabase...")
             _cloudNotifications.value = localNotifications
         }
 
@@ -116,11 +118,11 @@ class SyncService(
     /**
      * Real-time listeners: updates local state across views instantly on cloud revisions
      */
-    private fun observeRealtimeFirestoreUpdates() {
+    private fun observeRealtimeSupabaseUpdates() {
         scope.launch {
             cloudStudents.collectLatest { freshStudents ->
                 if (freshStudents.isNotEmpty()) {
-                    Log.d(tag, "Firestore Real-time: Students revised. Updating local cache.")
+                    Log.d(tag, "Supabase Real-time: Students revised. Updating local cache.")
                     storageService.saveStudents(freshStudents)
                 }
             }
@@ -128,7 +130,7 @@ class SyncService(
         scope.launch {
             cloudAttendance.collectLatest { freshAttendance ->
                 if (freshAttendance.isNotEmpty()) {
-                    Log.d(tag, "Firestore Real-time: Attendance records revised. Updating local cache.")
+                    Log.d(tag, "Supabase Real-time: Attendance records revised. Updating local cache.")
                     storageService.saveAttendance(freshAttendance)
                 }
             }
@@ -136,7 +138,7 @@ class SyncService(
         scope.launch {
             cloudTimetable.collectLatest { freshTimetable ->
                 if (freshTimetable.isNotEmpty()) {
-                    Log.d(tag, "Firestore Real-time: Timetable revised. Updating local cache.")
+                    Log.d(tag, "Supabase Real-time: Timetable revised. Updating local cache.")
                     storageService.saveTimetable(freshTimetable)
                 }
             }
@@ -144,7 +146,7 @@ class SyncService(
         scope.launch {
             cloudNotifications.collectLatest { freshNotifications ->
                 if (freshNotifications.isNotEmpty()) {
-                    Log.d(tag, "Firestore Real-time: Notifications revised. Updating local cache.")
+                    Log.d(tag, "Supabase Real-time: Notifications revised. Updating local cache.")
                     storageService.saveNotifications(freshNotifications)
                 }
             }
@@ -152,9 +154,9 @@ class SyncService(
     }
 
     // --- Student Cloud Sync Syncing ---
-    fun syncStudentToFirestore(studentObj: Student) {
+    fun syncStudentToSupabase(studentObj: Student) {
         scope.launch {
-            Log.d(tag, "Syncing Student to Firestore: docId=${studentObj.regNo}")
+            Log.d(tag, "Syncing Student to Supabase: docId=${studentObj.regNo}")
             // Push to Supabase Cloud Database
             SupabaseService.pushStudent(studentObj)
             
@@ -166,15 +168,15 @@ class SyncService(
         }
     }
 
-    fun getStudentsFromFirestore(): List<Student> {
+    fun getStudentsFromSupabase(): List<Student> {
         // Production: db.collection("students").get().await()
         return _cloudStudents.value.ifEmpty { storageService.getStudents() }
     }
 
     // --- Attendance Cloud Sync Syncing ---
-    fun syncAttendanceToFirestore(record: AttendanceRecord) {
+    fun syncAttendanceToSupabase(record: AttendanceRecord) {
         scope.launch {
-            Log.d(tag, "Syncing Attendance to Firestore (regNo=${record.regNo}, subject=${record.subject})")
+            Log.d(tag, "Syncing Attendance to Supabase (regNo=${record.regNo}, subject=${record.subject})")
             // Push to Supabase Cloud Database
             SupabaseService.pushAttendance(record)
             
@@ -190,10 +192,10 @@ class SyncService(
         }
     }
 
-    fun syncBulkAttendanceToFirestore(records: List<AttendanceRecord>) {
+    fun syncBulkAttendanceToSupabase(records: List<AttendanceRecord>) {
         if (records.isEmpty()) return
         scope.launch {
-            Log.d(tag, "Syncing ${records.size} attendance records in bulk to Firestore...")
+            Log.d(tag, "Syncing ${records.size} attendance records in bulk to Supabase...")
             val current = _cloudAttendance.value.toMutableList()
             records.forEach { record ->
                 SupabaseService.pushAttendance(record)
@@ -209,15 +211,15 @@ class SyncService(
         }
     }
 
-    fun getAttendanceFromFirestore(regNo: String): List<AttendanceRecord> {
+    fun getAttendanceFromSupabase(regNo: String): List<AttendanceRecord> {
         // Production: db.collection("attendance").whereEqualTo("regNo", regNo).get()
         return _cloudAttendance.value.filter { it.regNo.trim().equals(regNo.trim(), ignoreCase = true) }
     }
 
     // --- Timetable Cloud Sync Syncing ---
-    fun syncTimetableToFirestore(entry: TimetableEntry) {
+    fun syncTimetableToSupabase(entry: TimetableEntry) {
         scope.launch {
-            Log.d(tag, "Syncing Timetable to Firestore: id=${entry.id}")
+            Log.d(tag, "Syncing Timetable to Supabase: id=${entry.id}")
             SupabaseService.pushTimetable(entry)
             
             val current = _cloudTimetable.value.toMutableList()
@@ -228,9 +230,9 @@ class SyncService(
         }
     }
 
-    fun deleteTimetableFromFirestore(id: String) {
+    fun deleteTimetableFromSupabase(id: String) {
         scope.launch {
-            Log.d(tag, "Deleting Timetable entry from Firestore: id=$id")
+            Log.d(tag, "Deleting Timetable entry from Supabase: id=$id")
             SupabaseService.deleteTimetable(id)
             val current = _cloudTimetable.value.toMutableList()
             current.removeAll { it.id == id }
@@ -239,15 +241,15 @@ class SyncService(
         }
     }
 
-    fun getTimetableFromFirestore(branch: String): List<TimetableEntry> {
+    fun getTimetableFromSupabase(branch: String): List<TimetableEntry> {
         // Production: db.collection("timetable").whereEqualTo("branch", branch).get()
         return _cloudTimetable.value.filter { it.branch.trim().equals(branch.trim(), ignoreCase = true) }
     }
 
     // --- Notifications Sync Syncing ---
-    fun syncNotificationToFirestore(notif: NotificationItem) {
+    fun syncNotificationToSupabase(notif: NotificationItem) {
         scope.launch {
-            Log.d(tag, "Syncing notification to Firestore: docId=${notif.id}")
+            Log.d(tag, "Syncing notification to Supabase: docId=${notif.id}")
             SupabaseService.pushNotification(notif)
             val current = _cloudNotifications.value.toMutableList()
             current.removeAll { it.id == notif.id }

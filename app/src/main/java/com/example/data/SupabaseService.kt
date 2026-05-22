@@ -16,8 +16,8 @@ import java.io.IOException
 
 object SupabaseService {
     private const val TAG = "SupabaseService"
-    private const val BASE_URL = "https://hnbidqymmvyzylpxvvup.supabase.co/rest/v1"
-    private const val API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhnYmlkcXltbXZ5enlscHh2dnVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTYzNDE2MDIsImV4cCI6MjAyOTkxNzYwMn0.u6sM5yvREO7f_62LgD5tqZExCjC_B4wYn349VmsFmsQ" // Demo anon key
+    private val BASE_URL = com.example.BuildConfig.SUPABASE_URL
+    private val API_KEY = com.example.BuildConfig.SUPABASE_KEY
 
     private val client = OkHttpClient()
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
