@@ -118,7 +118,7 @@ class MainViewModel(private val context: Context, private val storageService: St
             title = cleanTitle,
             body = cleanBody
         )
-        syncService.syncNotificationToSupabase(notif)
+        syncService.syncNotificationToFirestore(notif)
         
         // Feed into local and cloud collections instantly
         val current = _notifications.value.toMutableList()
@@ -156,7 +156,7 @@ class MainViewModel(private val context: Context, private val storageService: St
 
         val success = storageService.registerStudent(student)
         return if (success) {
-            syncService.syncStudentToSupabase(student)
+            syncService.syncStudentToFirestore(student)
             _students.value = storageService.getStudents()
             Pair(true, "Student registered successfully!")
         } else {
@@ -215,7 +215,7 @@ class MainViewModel(private val context: Context, private val storageService: St
 
         val success = storageService.updateStudent(updated)
         return if (success) {
-            syncService.syncStudentToSupabase(updated)
+            syncService.syncStudentToFirestore(updated)
             _currentStudent.value = updated
             _students.value = storageService.getStudents()
             Pair(true, "Profile updated successfully")
@@ -227,7 +227,7 @@ class MainViewModel(private val context: Context, private val storageService: St
     fun updateStudentByAdmin(originalRegNo: String, updatedStudent: Student): Pair<Boolean, String> {
         val success = storageService.updateStudent(updatedStudent)
         return if (success) {
-            syncService.syncStudentToSupabase(updatedStudent)
+            syncService.syncStudentToFirestore(updatedStudent)
             _students.value = storageService.getStudents()
             // Sync current student in case the admin edited the logged in student
             if (_currentStudent.value?.regNo == originalRegNo) {
@@ -242,13 +242,13 @@ class MainViewModel(private val context: Context, private val storageService: St
     // --- Attendance Operations ---
     fun submitBulkAttendance(records: List<AttendanceRecord>) {
         storageService.markBulkAttendance(records)
-        syncService.syncBulkAttendanceToSupabase(records)
+        syncService.syncBulkAttendanceToFirestore(records)
         _attendance.value = storageService.getAttendance()
     }
 
     fun submitSingleAttendance(record: AttendanceRecord) {
         storageService.markSingleAttendance(record)
-        syncService.syncAttendanceToSupabase(record)
+        syncService.syncAttendanceToFirestore(record)
         _attendance.value = storageService.getAttendance()
     }
 
@@ -265,7 +265,7 @@ class MainViewModel(private val context: Context, private val storageService: St
             timeSlot = timeSlot.trim()
         )
         storageService.addTimetableEntry(entry)
-        syncService.syncTimetableToSupabase(entry)
+        syncService.syncTimetableToFirestore(entry)
         _timetable.value = storageService.getTimetable()
         return Pair(true, "Timetable entry added successfully")
     }
@@ -275,14 +275,14 @@ class MainViewModel(private val context: Context, private val storageService: St
             return Pair(false, "All fields are required")
         }
         storageService.updateTimetableEntry(updated)
-        syncService.syncTimetableToSupabase(updated)
+        syncService.syncTimetableToFirestore(updated)
         _timetable.value = storageService.getTimetable()
         return Pair(true, "Timetable entry updated successfully")
     }
 
     fun deleteTimetable(id: String) {
         storageService.deleteTimetableEntry(id)
-        syncService.deleteTimetableFromSupabase(id)
+        syncService.deleteTimetableFromFirestore(id)
         _timetable.value = storageService.getTimetable()
     }
 
