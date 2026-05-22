@@ -1,0 +1,8 @@
+{
+  "name": "Remix: AUCSE App",
+  "description": "A complete, production-ready offline attendance management app with QR code generation and scanning, custom dark theme, analytics, and dynamic branch management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
